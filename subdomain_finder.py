@@ -7,6 +7,8 @@ import socket
 import time
 import os
 import threading
+import argparse
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 class SubdomainFinder:
@@ -589,7 +591,7 @@ def get_wordlist_setting():
 
 def run_interactive_mode():
     """Run the tool in interactive mode with guided prompts"""
-    print("🔍 Subdomain Finder v0.5.0")
+    print("🔍 Subdomain Finder v1.0.0")
     print("=" * 60)
     print("⚠️  IMPORTANT: Only use on domains you own or have explicit permission to scan!")
     print("   Unauthorized subdomain enumeration may be illegal in your jurisdiction.")
@@ -633,14 +635,121 @@ def run_interactive_mode():
         print(f"\n❌ Unexpected error: {e}")
 
 def main():
-    """Main entry point for the subdomain finder"""
+    """Main entry point with command line argument support"""
+    parser = argparse.ArgumentParser(
+        description="Subdomain Finder - Discover subdomains using DNS brute force and Certificate Transparency",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s                                    # Interactive mode
+  %(prog)s example.com                        # Quick scan with defaults
+  %(prog)s github.com --dns-only              # DNS brute force only
+  %(prog)s google.com -t 5 --threads 100      # Custom timeout and threads
+  %(prog)s domain.com -w custom_wordlist.txt  # Custom wordlist
+  %(prog)s site.com --quiet                   # Minimal output for scripts
+        """)
+    
+    parser.add_argument(
+        'domain', 
+        nargs='?',  # Optional positional argument
+        help='Domain to scan (e.g., example.com, github.com)'
+    )
+    parser.add_argument(
+        '-t', '--timeout', 
+        type=int, 
+        default=3, 
+        metavar='SECONDS',
+        help='DNS timeout in seconds'
+    )
+    parser.add_argument(
+        '--threads', 
+        type=int, 
+        default=50, 
+        metavar='COUNT',
+        help='Number of concurrent threads'
+    )
+    parser.add_argument(
+        '-w', '--wordlist',
+        default='wordlists/common.txt',
+        metavar='FILE',
+        help='Path to subdomain wordlist file'
+    )
+    parser.add_argument(
+        '--dns-only',
+        action='store_true',
+        help='Use DNS brute force only (skip Certificate Transparency)'
+    )
+    parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help='Quiet mode - minimal output'
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='Subdomain Finder v1.0.0'
+    )
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
     # Test DNS connectivity first
     if not test_dns_connectivity():
         print("❌ DNS resolution not working. Check your internet connection.")
+        sys.exit(1)
+    
+    # If no domain provided, run interactive mode
+    if not args.domain:
+        run_interactive_mode()
         return
     
-    # Run interactive mode
-    run_interactive_mode()
+    # Validate command line arguments
+    if args.timeout < 1 or args.timeout > 30:
+        print("❌ Error: Timeout must be between 1 and 30 seconds")
+        sys.exit(1)
+    
+    if args.threads < 1 or args.threads > 500:
+        print("❌ Error: Thread count must be between 1 and 500")
+        sys.exit(1)
+    
+    # Clean up domain input
+    domain = args.domain.replace('http://', '').replace('https://', '').replace('www.', '')
+    
+    if not validate_domain(domain):
+        print("❌ Error: Invalid domain format")
+        sys.exit(1)
+    
+    if not os.path.exists(args.wordlist):
+        print(f"❌ Error: Wordlist file not found: {args.wordlist}")
+        sys.exit(1)
+    
+    # Show warning (unless in quiet mode)
+    if not args.quiet:
+        print("⚠️  WARNING: Only use on domains you own or have explicit permission to scan!")
+        print()
+    
+    # Command-line mode
+    try:
+        use_ct_logs = not args.dns_only
+        scanner = SubdomainFinder(domain, args.timeout, args.threads)
+        results = scanner.comprehensive_scan(args.wordlist, use_ct_logs)
+        
+        if args.quiet:
+            # In quiet mode, just print the subdomains
+            for result in sorted(results, key=lambda x: x['full_domain']):
+                print(result['full_domain'])
+        else:
+            print(f"\n🏁 Scan finished. Found {len(results)} subdomains for {domain}.")
+        
+        # Exit code: 0 if hosts found, 1 if none found
+        sys.exit(0 if results else 1)
+        
+    except KeyboardInterrupt:
+        print(f"\n\n⚠️  Scan interrupted by user")
+        sys.exit(130)  # Standard exit code for SIGINT
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
