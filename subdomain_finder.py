@@ -426,85 +426,221 @@ def test_dns_connectivity():
     except:
         return False
 
-def main():
-    """Main entry point for the subdomain finder"""
-    print("🔍 Subdomain Finder v0.4.0")
-    print("⚠️  WARNING: Only use on domains you own or have permission to scan!")
+def get_domain_input():
+    """Get domain from user with validation and examples"""
+    print("🌐 DOMAIN SELECTION:")
+    print("   • Enter a domain you own or have permission to scan")
+    print("   • Examples: example.com, github.com, your-company.com")
+    print("   • Do NOT include 'www' or 'http://' - just the domain name")
     print()
     
-    # Test DNS connectivity
-    if not test_dns_connectivity():
-        print("❌ DNS resolution not working. Check your internet connection.")
-        return
-    
-    # Get domain from user
     while True:
-        domain = input("🌐 Enter domain to scan (e.g., example.com): ").strip()
+        domain = input("Enter domain to scan: ").strip()
         
         if not domain:
             print("❌ Please enter a domain")
             continue
         
+        # Clean up common user mistakes
+        domain = domain.replace('http://', '').replace('https://', '')
+        domain = domain.replace('www.', '')
+        
         if not validate_domain(domain):
             print("❌ Invalid domain format. Please enter a valid domain (e.g., example.com)")
+            print("💡 Make sure it contains a dot and no special characters except hyphens")
             continue
         
-        break
-    
-    # Get scan method
-    print("\n🔍 SCAN METHODS:")
+        # Show what will be scanned
+        print(f"✅ Will scan subdomains of: {domain}")
+        confirm = input("Is this correct? (y/n) [y]: ").strip().lower()
+        if confirm in ['', 'y', 'yes']:
+            return domain
+        
+def get_scan_method():
+    """Get scanning method from user"""
+    print("\n🔍 SCANNING METHODS:")
     print("   1. DNS Brute Force only")
+    print("      • Fast and reliable")
+    print("      • Uses common subdomain wordlist")
+    print("      • Finds actively responding subdomains")
+    print()
     print("   2. Certificate Transparency + DNS Brute Force (recommended)")
+    print("      • More comprehensive discovery")
+    print("      • Finds subdomains from SSL certificates")
+    print("      • May discover hidden/forgotten subdomains")
+    print()
     
-    method_choice = input("Choose scanning method (1/2) [2]: ").strip()
-    use_ct_logs = method_choice != '1'
+    while True:
+        choice = input("Choose scanning method (1/2) [2]: ").strip()
+        
+        if choice == '1':
+            return False  # DNS only
+        elif choice in ['', '2']:
+            return True   # CT + DNS
+        else:
+            print("❌ Please choose 1 or 2")
+
+def get_timeout_setting():
+    """Get timeout setting from user with validation"""
+    print("\n⏱️  TIMEOUT CONFIGURATION:")
+    print("   • Faster timeout: 1-2 seconds (may miss slow devices)")
+    print("   • Balanced timeout: 3 seconds (recommended for most networks)")
+    print("   • Thorough timeout: 5+ seconds (catches very slow devices)")
+    print()
     
-    # Get timeout setting
+    while True:
+        timeout_input = input("Enter DNS timeout in seconds [3]: ").strip()
+        
+        if not timeout_input:
+            return 3  # Default
+        
+        try:
+            timeout = int(timeout_input)
+            if timeout < 1:
+                print("❌ Timeout must be at least 1 second")
+                continue
+            elif timeout > 30:
+                print("❌ Timeout cannot exceed 30 seconds (too slow)")
+                continue
+            elif timeout > 10:
+                print(f"⚠️  Warning: {timeout} seconds is quite slow. This will take a long time.")
+                confirm = input("Continue with this timeout? (y/n): ").strip().lower()
+                if confirm not in ['y', 'yes']:
+                    continue
+            
+            return timeout
+            
+        except ValueError:
+            print("❌ Please enter a valid number")
+
+def get_thread_count():
+    """Get thread count from user with validation"""
+    print("\n🧵 THREADING CONFIGURATION:")
+    print("   • Conservative: 10-25 threads (safe for all systems)")
+    print("   • Balanced: 50 threads (recommended)")
+    print("   • Aggressive: 100+ threads (may overwhelm network/DNS)")
+    print()
+    
+    while True:
+        threads_input = input("Enter number of threads [50]: ").strip()
+        
+        if not threads_input:
+            return 50  # Default
+        
+        try:
+            threads = int(threads_input)
+            if threads < 1:
+                print("❌ Thread count must be at least 1")
+                continue
+            elif threads > 500:
+                print("❌ Maximum 500 threads allowed to prevent system overload")
+                continue
+            elif threads > 100:
+                print(f"⚠️  Warning: {threads} threads may overwhelm your network or DNS servers")
+                confirm = input("Continue with this many threads? (y/n): ").strip().lower()
+                if confirm not in ['y', 'yes']:
+                    continue
+            
+            return threads
+            
+        except ValueError:
+            print("❌ Please enter a valid number")
+
+def get_wordlist_setting():
+    """Get wordlist setting from user"""
+    print("\n📋 WORDLIST CONFIGURATION:")
+    
+    default_wordlist = "wordlists/common.txt"
+    
+    if os.path.exists(default_wordlist):
+        with open(default_wordlist, 'r') as f:
+            word_count = sum(1 for line in f if line.strip())
+        print(f"   • Default wordlist: {default_wordlist} ({word_count} subdomains)")
+    else:
+        print(f"   • Default wordlist: {default_wordlist} (not found)")
+    
+    print("   • Custom wordlist: Specify your own file path")
+    print()
+    
+    while True:
+        choice = input("Use default wordlist or specify custom path? (default/custom) [default]: ").strip().lower()
+        
+        if choice in ['', 'default', 'd']:
+            if os.path.exists(default_wordlist):
+                return default_wordlist
+            else:
+                print(f"❌ Default wordlist not found: {default_wordlist}")
+                print("💡 Make sure the wordlists/common.txt file exists")
+                return None
+        
+        elif choice in ['custom', 'c']:
+            custom_path = input("Enter custom wordlist path: ").strip()
+            if not custom_path:
+                print("❌ Please enter a file path")
+                continue
+            
+            if os.path.exists(custom_path):
+                return custom_path
+            else:
+                print(f"❌ File not found: {custom_path}")
+                continue
+        else:
+            print("❌ Please choose 'default' or 'custom'")
+
+def run_interactive_mode():
+    """Run the tool in interactive mode with guided prompts"""
+    print("🔍 Subdomain Finder v0.5.0")
+    print("=" * 60)
+    print("⚠️  IMPORTANT: Only use on domains you own or have explicit permission to scan!")
+    print("   Unauthorized subdomain enumeration may be illegal in your jurisdiction.")
+    print("=" * 60)
+    
     try:
-        timeout_input = input("⏱️  DNS timeout in seconds [3]: ").strip()
-        timeout = int(timeout_input) if timeout_input else 3
-        if timeout < 1 or timeout > 10:
-            print("⚠️  Invalid timeout, using default: 3 seconds")
-            timeout = 3
-    except ValueError:
-        timeout = 3
-        print("⚠️  Invalid timeout, using default: 3 seconds")
-    
-    # Get thread count setting
-    try:
-        threads_input = input("🧵 Number of threads [50]: ").strip()
-        threads = int(threads_input) if threads_input else 50
-        if threads > 200:
-            print("⚠️  Warning: Too many threads may overwhelm DNS servers")
-            threads = 200
-        elif threads < 1:
-            threads = 1
-    except ValueError:
-        threads = 50
-        print("⚠️  Invalid thread count, using default: 50")
-    
-    # Check if wordlist exists
-    wordlist_path = "wordlists/common.txt"
-    if not os.path.exists(wordlist_path):
-        print(f"❌ Wordlist not found: {wordlist_path}")
-        print("💡 Make sure the wordlists/common.txt file exists")
-        return
-    
-    # Create scanner and run
-    scanner = SubdomainFinder(domain, timeout, threads)
-    
-    try:
+        # Get all settings from user with validation
+        domain = get_domain_input()
+        use_ct_logs = get_scan_method()
+        timeout = get_timeout_setting()
+        threads = get_thread_count()
+        wordlist_path = get_wordlist_setting()
+        
+        if not wordlist_path:
+            print("❌ Cannot proceed without a valid wordlist")
+            return
+        
+        # Show final configuration
+        print(f"\n📋 SCAN CONFIGURATION:")
+        print(f"   Domain: {domain}")
+        print(f"   Method: {'Certificate Transparency + DNS Brute Force' if use_ct_logs else 'DNS Brute Force only'}")
+        print(f"   Timeout: {timeout} seconds")
+        print(f"   Threads: {threads}")
+        print(f"   Wordlist: {wordlist_path}")
+        print()
+        
+        confirm = input("Start scan with these settings? (y/n) [y]: ").strip().lower()
+        if confirm not in ['', 'y', 'yes']:
+            print("👋 Scan cancelled by user")
+            return
+        
+        # Create scanner and run
+        scanner = SubdomainFinder(domain, timeout, threads)
         results = scanner.comprehensive_scan(wordlist_path, use_ct_logs)
-        print(f"\n🏁 Scan finished. Found {len(results)} subdomains.")
+        
+        print(f"\n🏁 Scan finished. Found {len(results)} subdomains for {domain}.")
         
     except KeyboardInterrupt:
-        print(f"\n\n⚠️  Scan interrupted by user")
-        if scanner.found_subdomains:
-            print(f"✅ Subdomains found so far: {len(scanner.found_subdomains)}")
-            for result in scanner.found_subdomains:
-                print(f"   • {result['full_domain']}")
+        print(f"\n\n👋 Scan cancelled by user. Goodbye!")
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
+
+def main():
+    """Main entry point for the subdomain finder"""
+    # Test DNS connectivity first
+    if not test_dns_connectivity():
+        print("❌ DNS resolution not working. Check your internet connection.")
+        return
+    
+    # Run interactive mode
+    run_interactive_mode()
 
 if __name__ == "__main__":
     main()
