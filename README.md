@@ -9,19 +9,13 @@ A multi-threaded Python tool for discovering subdomains using DNS brute force, c
 ## Features
 
 - **DNS Brute Force**: High-speed subdomain discovery using custom wordlists
-- **Multi-threading**: Concurrent scanning for maximum performance
-- **Certificate Transparency**: Query public SSL certificate logs
-- **Multiple Output Formats**: Export results to TXT, CSV, or JSON
-- **Interactive & CLI Modes**: User-friendly interface or automation-ready
-- **Custom Wordlists**: Use built-in or custom subdomain lists
-- **Real-time Progress**: Live scanning feedback with progress tracking
-
-## Reconnaissance Techniques
-
-1. **DNS Brute Force** - Test common subdomain names against target domain
-2. **Certificate Transparency Logs** - Search public certificate databases
-3. **DNS Zone Walking** - Attempt zone transfers (if misconfigured)
-4. **Wildcard Detection** - Identify and handle wildcard DNS responses
+- **Multi-threading**: Concurrent scanning for maximum performance (1000x+ faster)
+- **Certificate Transparency**: Query CertSpotter API for SSL certificate data
+- **Interactive Mode**: Guided prompts with validation and examples
+- **Command-line Interface**: Professional CLI for automation and scripting
+- **Custom Wordlists**: Support for custom subdomain wordlist files
+- **Real-time Progress**: Live scanning feedback with completion percentage
+- **Source Tracking**: Shows discovery method (DNS, CT_LOG, or both)
 
 ## Requirements
 
